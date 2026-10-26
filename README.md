@@ -19,4 +19,10 @@
 
 ![三条线路地图](preview-map.png)
 
+![模拟灯光练习](preview-lighting.jpg)
+
+![手机竖屏](preview-phone-portrait.jpg)
+
+![手机横屏](preview-phone-landscape.jpg)
+
 下载后直接打开 `index.html`。训练示意，非官方考试系统。
