@@ -1601,7 +1601,7 @@ class Trainer{
       if(LaneModel.blocked(this.R,before,this.dist)){this.fault('换道尚未完成就进入实线区',10,'solid-during');this.lateralTarget=ch.from;this.change=null}
       else {ch.progress=Math.min(1,ch.progress+Math.min(dt/3.5,moved/12));const u=ch.progress*ch.progress*(3-2*ch.progress);this.lateral=ch.from+(ch.to-ch.from)*u;if(ch.progress>=1){this.lateral=ch.to;this.change=null;this.lastLaneChange={stage:ch.stage,side:ch.side,s:this.dist};if(ch.stage===2&&this.current()?.kind==='start')this.startChanges++}}
     }else if(!this.change&&moved>0)this.lateral+=clamp(this.lateralTarget-this.lateral,-.25*dt,.25*dt);
-    if(this.current()?.kind==='uturn'&&this.st.started){const e=this.current(),end=this.R.legs.filter(l=>l.piece===e.piece&&!l.bridge).at(-1)?.s1??e.s+20;if(this.dist>=e.s){const u=clamp((this.dist-e.s)/(end-e.s||1),0,1);this.lateral=3.6*(1-u*u*(3-2*u));this.lateralTarget=this.lateral}}
+    if(this.current()?.kind==='uturn'){const e=this.current(),end=this.R.legs.filter(l=>l.piece===e.piece&&!l.bridge).at(-1)?.s1??e.s+20;if(this.dist>=e.s&&this.dist<=end&&!this.change){if(this.st.turnLaneOffset==null){this.st.turnLaneOffset=this.lateral-this.R.planLatAt(e.s);if(this.lane!==1)this.fault('掉头前应先进入左侧车道',10,'uturn-entry')}this.lateral=this.R.planLatAt(this.dist)+this.st.turnLaneOffset;this.lateralTarget=this.lateral}}
     this.updatePose();
     if(beforeSpeed>=.02&&this.stopped())this.registerStop();if(this.stopped())this.captureStation();this.judge(moved,before);
   }
@@ -1624,7 +1624,7 @@ class Trainer{
       else if(!this.st.sub&&d<-6){this.fault('开始超车后未停车或未完成左换道',10,'overtake-start');this.complete(false)}return;
     }
     if((e.kind==='lane'||e.kind==='autolane')&&this.st.started&&this.lastLaneChange?.stage===this.stage&&this.laneSettled){this.indicators=null;this.complete();return}
-    const passed=['left','right'].includes(e.kind)?this.dist>(this.pcDriver||e.sameLaneEntry?pcTurnEnd(this.R,e):e.s+12):d<-6;
+    const turnEnd=e.kind==='uturn'?(this.R.legs.filter(l=>l.piece===e.piece&&!l.bridge).at(-1)?.s1??e.s+20)+3:['left','right'].includes(e.kind)?pcTurnEnd(this.R,e):null;const passed=turnEnd!=null?this.dist>turnEnd:d<-6;
     if(passed){
       if(this.wantsStop()&&!this.st.started)this.fault('未在本项目停车并完成 N → 1 起步',10,'stop');
       if(['left','uturn','right'].includes(e.kind)){const want=['right','uturn'].includes(e.kind)?0:1;if(this.lane!==want||!this.laneSettled)this.fault(e.name+'未走'+(want?'左':'右')+'车道',10,'turn-lane');if(!this.st.started)this.checkDirection(this.direction());else if(this.indicators!==this.direction())this.fault('转弯完成前应保持相应转向灯',10,'turn-signal-held')}
@@ -2575,7 +2575,7 @@ Trainer.prototype.act=function(action,value){
 const tickV14=Trainer.prototype.tick;
 Trainer.prototype.tick=function(dt){if(this.pcDriver){this.commands?.pump(this.dist,this);return this.pcDriver.tick(dt)}return tickV14.call(this,dt)};
 const poseV14=Trainer.prototype.updatePose;
-Trainer.prototype.updatePose=function(){const e=this.current();if(!this.pcDriver&&e?.sameLaneEntry&&this.st.started&&this.dist>=e.turnS0){this.lateral=this.lateralTarget=this.R.planLatAt(this.dist)}if(this.pcDriver){this.x=this.pcDriver.x;this.y=this.pcDriver.y;this.heading=this.pcDriver.heading;return}poseV14.call(this)};
+Trainer.prototype.updatePose=function(){const e=this.current();if(!this.pcDriver&&e?.sameLaneEntry&&this.dist>=e.turnS0&&this.dist<=e.turnS1&&!this.change){if(this.st.turnLaneOffset==null)this.st.turnLaneOffset=this.lateral-this.R.planLatAt(e.turnS0);this.lateral=this.lateralTarget=this.R.planLatAt(this.dist)+this.st.turnLaneOffset}if(this.pcDriver){this.x=this.pcDriver.x;this.y=this.pcDriver.y;this.heading=this.pcDriver.heading;return}poseV14.call(this)};
 Object.defineProperty(Trainer.prototype,'laneSettled',{get(){if(!this.pcDriver)return !this.change&&Math.abs(this.lateral-this.lateralTarget)<.035;const frame=this.pcDriver.frame,angle=Math.atan2(frame.dir[1],frame.dir[0]);return !this.change&&Math.abs(this.lateral-this.lateralTarget)<.6&&Math.abs(Math.atan2(Math.sin(this.heading-angle),Math.cos(this.heading-angle)))<.22}});
 const judgeV14=Trainer.prototype.judge;
 Trainer.prototype.judge=function(moved,before){if(this.pcDriver&&this.current()?.kind==='start'){const wanted=this.R.id==='2'?3.6:0,needed=this.R.id==='2'?2:1;if(this.st.startReleased&&this.laneSettled&&Math.abs(this.lateral-wanted)<.6&&this.startChanges>=needed)this.complete();else if(this.dist>76){this.fault('道路收窄前未完成起步左并道（'+needed+'次）',10,'start-merge');this.complete(false)}return}return judgeV14.call(this,moved,before)};
